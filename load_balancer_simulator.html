@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Load Balancer Simulator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #111827;
+            color: #F3F4F6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+
+        h1 {
+            color: #3B82F6;
+            margin-bottom: 5px;
+        }
+
+        .controls {
+            background: #1F2937;
+            padding: 15px 25px;
+            border-radius: 8px;
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            align-items: center;
+        }
+
+        select,
+        button {
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button {
+            background: #10B981;
+            color: white;
+        }
+
+        button:hover {
+            background: #059669;
+        }
+
+        .container {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            width: 100%;
+            max-width: 900px;
+            position: relative;
+        }
+
+        .node {
+            border: 2px solid #374151;
+            background: #1F2937;
+            padding: 20px;
+            border-radius: 10px;
+            width: 180px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .lb-node {
+            border-color: #3B82F6;
+        }
+
+        .server-node {
+            transition: border-color 0.3s;
+        }
+
+        .offline {
+            border-color: #EF4444 !important;
+            opacity: 0.6;
+        }
+
+        .active {
+            border-color: #10B981 !important;
+        }
+
+        .metrics {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #9CA3AF;
+        }
+
+        .toggle-btn {
+            margin-top: 10px;
+            background: #EF4444;
+            font-size: 0.8em;
+        }
+
+        /* Request Animation */
+        .request-dot {
+            width: 12px;
+            height: 12px;
+            background: #F59E0B;
+            border-radius: 50%;
+            position: absolute;
+            transition: all 0.8s ease-in-out;
+            z-index: 10;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Interactive Load Balancer Simulator</h1>
+    <p>Simulate client request routing across dynamic backend targets</p>
+
+    <div class="controls">
+        <label>Algorithm: </label>
+        <select id="algorithm">
+            <option value="round-robin">Round Robin</option>
+            <option value="least-conn">Least Connections</option>
+        </select>
+        <button onclick="sendRequest()">Send Traffic Request</button>
+    </div>
+
+    <div class="container" id="simulation-area">
+        <!-- Client Node -->
+        <div class="node" id="client">
+            <h3>Clients</h3>
+            <p>Traffic Source</p>
+        </div>
+
+        <!-- Load Balancer Node -->
+        <div class="node lb-node" id="lb">
+            <h3>Load Balancer</h3>
+            <div class="metrics">Status: Active</div>
+        </div>
+
+        <!-- Servers Column -->
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+            <div class="node server-node" id="server-1">
+                <h3>Server A</h3>
+                <div class="metrics">Connections: <span id="conn-1">0</span></div>
+                <button class="toggle-btn" onclick="toggleServer(1)">Toggle Offline</button>
+            </div>
+            <div class="node server-node" id="server-2">
+                <h3>Server B</h3>
+                <div class="metrics">Connections: <span id="conn-2">0</span></div>
+                <button class="toggle-btn" onclick="toggleServer(2)">Toggle Offline</button>
+            </div>
+            <div class="node server-node" id="server-3">
+                <h3>Server C</h3>
+                <div class="metrics">Connections: <span id="conn-3">0</span></div>
+                <button class="toggle-btn" onclick="toggleServer(3)">Toggle Offline</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const servers = [
+            { id: 1, name: "Server A", activeConns: 0, healthy: true },
+            { id: 2, name: "Server B", activeConns: 0, healthy: true },
+            { id: 3, name: "Server C", activeConns: 0, healthy: true }
+        ];
+
+        let rrIndex = 0;
+
+        function toggleServer(id) {
+            const server = servers.find(s => s.id === id);
+            server.healthy = !server.healthy;
+            const el = document.getElementById(`server-${id}`);
+            if (!server.healthy) {
+                el.classList.add('offline');
+                server.activeConns = 0;
+                document.getElementById(`conn-${id}`).innerText = 0;
+            } else {
+                el.classList.remove('offline');
+            }
+        }
+
+        function selectServer() {
+            const algo = document.getElementById('algorithm').value;
+            const healthyServers = servers.filter(s => s.healthy);
+
+            if (healthyServers.length === 0) return null;
+
+            if (algo === 'round-robin') {
+                const selected = healthyServers[rrIndex % healthyServers.length];
+                rrIndex++;
+                return selected;
+            } else if (algo === 'least-conn') {
+                return healthyServers.reduce((min, s) => s.activeConns < min.activeConns ? s : min, healthyServers[0]);
+            }
+        }
+
+        function sendRequest() {
+            const targetServer = selectServer();
+            if (!targetServer) {
+                alert("All servers are offline! Load Balancer returned 503 Service Unavailable.");
+                return;
+            }
+
+            // Animate dot from Client to LB to Target Server
+            const clientRect = document.getElementById('client').getBoundingClientRect();
+            const lbRect = document.getElementById('lb').getBoundingClientRect();
+            const targetRect = document.getElementById(`server-${targetServer.id}`).getBoundingClientRect();
+
+            const dot = document.createElement('div');
+            dot.className = 'request-dot';
+            dot.style.left = `${clientRect.right}px`;
+            dot.style.top = `${clientRect.top + clientRect.height / 2}px`;
+            document.body.appendChild(dot);
+
+            // Increment active connections
+            targetServer.activeConns++;
+            document.getElementById(`conn-${targetServer.id}`).innerText = targetServer.activeConns;
+
+            // First leg: Client to Load Balancer
+            setTimeout(() => {
+                dot.style.left = `${lbRect.left - 6}px`;
+                dot.style.top = `${lbRect.top + lbRect.height / 2}px`;
+            }, 50);
+
+            // Second leg: Load Balancer to Target Server
+            setTimeout(() => {
+                dot.style.left = `${targetRect.left - 6}px`;
+                dot.style.top = `${targetRect.top + targetRect.height / 2}px`;
+            }, 850);
+
+            // Complete request & cleanup
+            setTimeout(() => {
+                dot.remove();
+                targetServer.activeConns = Math.max(0, targetServer.activeConns - 1);
+                document.getElementById(`conn-${targetServer.id}`).innerText = targetServer.activeConns;
+            }, 2300);
+        }
+    </script>
+</body>
+
+</html>
