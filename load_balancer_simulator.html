@@ -111,13 +111,25 @@
 
         /* Request Animation */
         .request-dot {
-            width: 12px;
-            height: 12px;
-            background: #F59E0B;
-            border-radius: 50%;
+            width: 0; 
+            height: 0; 
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+            border-left: 14px solid #F59E0B;
+            background: transparent;
             position: absolute;
-            transition: all 0.8s ease-in-out;
+            transition: left 0.8s ease-in-out, top 0.8s ease-in-out;
             z-index: 10;
+        }
+        
+        .request-dot::after {
+            content: '';
+            position: absolute;
+            width: 14px;
+            height: 6px;
+            background: #F59E0B;
+            top: -3px;
+            left: -28px;
         }
     </style>
 </head>
@@ -132,11 +144,9 @@
         <select id="algorithm">
             <option value="round-robin">Round Robin</option>
             <option value="least-conn">Least Connections</option>
-            <option value="ip-hash">IP Hashing</option>
         </select>
-        <label style="margin-left: 10px;">Client IP: </label>
-        <input type="text" id="client-ip" value="192.168.1.10" style="width: 110px; padding: 6px; border-radius: 4px; border: 1px solid #4B5563; background: #374151; color: white;">
-        <button style="margin-left: 10px;" onclick="sendRequest()">Send Traffic Request</button>
+        <button id="traffic-btn" onclick="toggleTraffic()">Start Sending Traffic</button>
+        <button style="background: #6B7280; margin-left: 10px;" onclick="resetConnections()">Reset Connections</button>
     </div>
 
     <div class="container" id="simulation-area">
@@ -156,17 +166,20 @@
         <div style="display: flex; flex-direction: column; gap: 20px;">
             <div class="node server-node" id="server-1">
                 <h3>Server A</h3>
-                <div class="metrics">Connections: <input type="number" id="conn-1" value="0" min="0" class="conn-input" onchange="updateConns(1)"></div>
+                <div class="metrics">Connections: <input type="number" id="conn-1" value="0" min="0" class="conn-input"
+                        onchange="updateConns(1)"></div>
                 <button class="toggle-btn" onclick="toggleServer(1)">Toggle Offline</button>
             </div>
             <div class="node server-node" id="server-2">
                 <h3>Server B</h3>
-                <div class="metrics">Connections: <input type="number" id="conn-2" value="0" min="0" class="conn-input" onchange="updateConns(2)"></div>
+                <div class="metrics">Connections: <input type="number" id="conn-2" value="0" min="0" class="conn-input"
+                        onchange="updateConns(2)"></div>
                 <button class="toggle-btn" onclick="toggleServer(2)">Toggle Offline</button>
             </div>
             <div class="node server-node" id="server-3">
                 <h3>Server C</h3>
-                <div class="metrics">Connections: <input type="number" id="conn-3" value="0" min="0" class="conn-input" onchange="updateConns(3)"></div>
+                <div class="metrics">Connections: <input type="number" id="conn-3" value="0" min="0" class="conn-input"
+                        onchange="updateConns(3)"></div>
                 <button class="toggle-btn" onclick="toggleServer(3)">Toggle Offline</button>
             </div>
         </div>
@@ -180,6 +193,33 @@
         ];
 
         let rrIndex = 0;
+        let trafficInterval = null;
+
+        function resetConnections() {
+            servers.forEach(server => {
+                server.activeConns = 0;
+                const connInput = document.getElementById(`conn-${server.id}`);
+                if (connInput) {
+                    connInput.value = 0;
+                }
+            });
+        }
+
+        function toggleTraffic() {
+            const btn = document.getElementById('traffic-btn');
+            if (trafficInterval) {
+                clearInterval(trafficInterval);
+                trafficInterval = null;
+                btn.innerText = "Start Sending Traffic";
+                btn.style.background = "#10B981"; // Green
+            } else {
+                // Send an initial request immediately, then start the interval
+                sendRequest();
+                trafficInterval = setInterval(sendRequest, 600); // Send request every 600ms
+                btn.innerText = "Stop Sending Traffic";
+                btn.style.background = "#EF4444"; // Red
+            }
+        }
 
         function updateConns(id) {
             const server = servers.find(s => s.id === id);
@@ -207,16 +247,6 @@
             }
         }
 
-        function hashCode(str) {
-            let hash = 0;
-            for (let i = 0, len = str.length; i < len; i++) {
-                let chr = str.charCodeAt(i);
-                hash = (hash << 5) - hash + chr;
-                hash |= 0;
-            }
-            return Math.abs(hash);
-        }
-
         function selectServer() {
             const algo = document.getElementById('algorithm').value;
             const healthyServers = servers.filter(s => s.healthy);
@@ -229,10 +259,6 @@
                 return selected;
             } else if (algo === 'least-conn') {
                 return healthyServers.reduce((min, s) => s.activeConns < min.activeConns ? s : min, healthyServers[0]);
-            } else if (algo === 'ip-hash') {
-                const ip = document.getElementById('client-ip').value || "";
-                const hash = hashCode(ip);
-                return healthyServers[hash % healthyServers.length];
             }
         }
 
@@ -273,8 +299,6 @@
             // Complete request & cleanup
             setTimeout(() => {
                 dot.remove();
-                targetServer.activeConns = Math.max(0, targetServer.activeConns - 1);
-                document.getElementById(`conn-${targetServer.id}`).value = targetServer.activeConns;
             }, 2300);
         }
     </script>
